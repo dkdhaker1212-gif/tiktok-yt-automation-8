@@ -3,7 +3,7 @@
 
 channels:
   - id: channel_8                         # unique; used in DB, logs, secret names
-    tiktok_username: "fc45ac22"           # no @  -- axe/knife throwing, target trick shots (shared source with ch5, Spanish audience)
+    tiktok_username: "josefernandez_blacksmith"   # no @  -- Spanish blacksmith forging axes/knives/swords from scrap steel (own YT channel = 408 subs, effectively not on YouTube). Dedicated source, zero overlap with ch5.
     youtube_channel_name: "Hachazo Perfecto"
     owner_email: "kishukumaridhaker@gmail.com"
 
@@ -12,11 +12,11 @@ channels:
 
     videos_per_day: 2
     description_footer: ""
-    default_tags: [lanzamiento de hacha, hacha, tiro con hacha, diana, trick shot,
-                   lanzamiento de cuchillo, punteria, hachas, deportes extremos,
-                   tiro perfecto, satisfactorio, hachazo, competencia de hachas,
-                   entretenimiento, shorts virales, tiros imposibles, precision]
-    youtube_category_id: "17"             # 17 Sports
+    default_tags: [forja, hacha forjada, herreria, forja artesanal, hacha vikinga,
+                   cuchillo forjado, blacksmith, forjando un hacha, damasco, acero,
+                   como forjar, hachazo perfecto, satisfactorio, forja de cuchillos,
+                   yunque, trabajo del metal, hecho a mano, shorts virales, artesania, vikingo]
+    youtube_category_id: "24"             # 24 Entertainment (forging / craft content)
     enabled: true
     max_retry_days: 7
     shorts_max_seconds: 180
@@ -53,9 +53,9 @@ channels:
       accent_rgb: [220, 38, 38]
       hook_templates:
         - "MIRA ESTO"
-        - "TIRO PERFECTO"
+        - "DE CHATARRA A HACHA"
         - "NO LO VAS A CREER"
-        - "DIANA EXACTA"
+        - "ACERO AL ROJO VIVO"
 
     slot_publish_times_utc:               # these ARE the cron fire times
       1: "17:00"                          # 1:00 PM US Eastern (EDT) -- user-requested "USA time 1pm"
