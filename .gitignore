@@ -1,0 +1,28 @@
+# secrets - written by CI from GitHub Secrets, never committed
+credentials/*
+tokens/*
+!credentials/.gitkeep
+!tokens/.gitkeep
+
+# scratch space on the runner
+downloads/*
+!downloads/.gitkeep
+
+# logs - uploaded as an Actions artifact instead
+logs/*
+!logs/.gitkeep
+
+# generated
+dashboard.html
+
+# local env
+.env
+*.pyc
+__pycache__/
+.venv/
+venv/
+
+# SQLite sidecar files (the .db itself IS committed)
+data/*.db-wal
+data/*.db-shm
+data/*.db-journal

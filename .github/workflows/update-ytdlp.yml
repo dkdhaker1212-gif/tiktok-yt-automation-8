@@ -1,0 +1,55 @@
+name: "Channel 8 - Bump yt-dlp (06:00 UTC)"
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: "0 6 * * *"
+
+permissions:
+  contents: write
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Resolve latest yt-dlp on PyPI
+        id: latest
+        run: |
+          set -e
+          LATEST=$(curl -fsSL https://pypi.org/pypi/yt-dlp/json | python -c "import sys,json;print(json.load(sys.stdin)['info']['version'])")
+          echo "version=$LATEST" >> "$GITHUB_OUTPUT"
+          echo "latest yt-dlp = $LATEST"
+
+      - name: Rewrite the pin
+        run: |
+          python - <<'PY'
+          import re, pathlib
+          v = "${{ steps.latest.outputs.version }}"
+          p = pathlib.Path("requirements.txt")
+          txt = p.read_text()
+          new = re.sub(r"^yt-dlp>=.*$", f"yt-dlp>={v}", txt, flags=re.M)
+          p.write_text(new)
+          print(new)
+          PY
+
+      - name: Commit if changed
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add requirements.txt
+          git commit -m "deps: bump yt-dlp pin to >=${{ steps.latest.outputs.version }}" \
+            || { echo "already current"; exit 0; }
+          git push
+
+      - name: Ping Discord on failure
+        if: failure()
+        run: |
+          curl -fsS -H "Content-Type: application/json" \
+            -d '{"content":"⚠️ channel_8: update-ytdlp workflow failed — check yt-dlp version resolution"}' \
+            "${{ secrets.DISCORD_WEBHOOK_URL }}" || true

@@ -1,0 +1,62 @@
+# THE channel config. Loaded and validated by src/config.py.
+# One entry per channel. This repo hosts exactly one.
+
+channels:
+  - id: channel_8                         # unique; used in DB, logs, secret names
+    tiktok_username: "fc45ac22"           # no @  -- axe/knife throwing, target trick shots (shared source with ch5, Spanish audience)
+    youtube_channel_name: "Hachazo Perfecto"
+    owner_email: "kishukumaridhaker@gmail.com"
+
+    google_credentials_file: "credentials/channel_8_client_secret.json"
+    oauth_token_file: "tokens/channel_8_token.json"
+
+    videos_per_day: 2
+    description_footer: ""
+    default_tags: [lanzamiento de hacha, hacha, tiro con hacha, diana, trick shot,
+                   lanzamiento de cuchillo, punteria, hachas, deportes extremos,
+                   tiro perfecto, satisfactorio, hachazo, competencia de hachas,
+                   entretenimiento, shorts virales, tiros imposibles, precision]
+    youtube_category_id: "17"             # 17 Sports
+    enabled: true
+    max_retry_days: 7
+    shorts_max_seconds: 180
+    upload_mode: popular_only             # always pick the most-viewed unposted video
+    max_download_candidates: 20
+
+    use_ai_seo: true
+    seo_language: "es"                    # Gemini writes Spanish title/description/tags
+    edit:
+      enabled: true
+      zoom_crop_pct: 2.0
+      speed: 1.03
+      hflip: false
+      fade_seconds: 0.25
+      sharpen: true
+      denoise: false
+      saturation: 1.05
+      contrast: 1.05
+      loudnorm: true
+      volume_gain_db: 0.0
+      blur_regions: []
+      brand_overlay:                     # small corner mark = the channel's own logo
+        enabled: true
+        image: "assets/brand_badge.png"
+        corner: tr
+        width_pct: 10
+        margin_pct: 3
+        opacity: 0.92
+
+    thumbnail:
+      enabled: true
+      hook_source: title
+      position: bottom
+      accent_rgb: [220, 38, 38]
+      hook_templates:
+        - "MIRA ESTO"
+        - "TIRO PERFECTO"
+        - "NO LO VAS A CREER"
+        - "DIANA EXACTA"
+
+    slot_publish_times_utc:               # these ARE the cron fire times
+      1: "16:00"                          # 12:00 PM US Eastern (US midday scroll) = 9:30 PM IST
+      2: "23:00"                          # 7:00 PM US Eastern (US evening prime)  = 4:30 AM IST
