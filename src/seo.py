@@ -299,8 +299,18 @@ def _fallback(caption, tiktok_tags, base_tags, is_short, recent_titles=None,
     cap_clean = re.sub(r"#\S+", "", cap).strip(" .,-|")
     kws = _keywords(cap) or base_tags[:5] or ["viral", "trending"]
 
-    if len(cap_clean) < 12:
-        base = " ".join(kws[:6]).title()
+    # a caption that is just the uploader handle / a single junk token is useless
+    _junk_cap = (" " not in cap_clean) or (len(cap_clean.split()) < 2)
+    if len(cap_clean) < 12 or _junk_cap:
+        base = " ".join((base_tags[:6] or kws[:6])).title()
+        # make it read like a real title, not a tag dump: lead with a hook
+        _hooks = _LANG_HOOKS.get(language, _HOOK_POOL)
+        _used0 = {_norm(r) for r in (recent_titles or [])}
+        for h in _hooks:
+            cand = f"{h}: {base}"
+            if _norm(cand) not in _used0:
+                base = cand
+                break
     else:
         base = cap_clean[:84].rstrip(" .,-")
     # rotate a distinct opener that has not been used recently
@@ -319,11 +329,14 @@ def _fallback(caption, tiktok_tags, base_tags, is_short, recent_titles=None,
         [*base_tags, *[t.lower() for t in tiktok_tags], *kws,
          "shorts", "viral", "trending", "fyp"]))[:22]
     hs = (["#shorts"] if is_short else []) + _LANG_HASHTAGS.get(language, _LANG_HASHTAGS["en"])
+    desc_lead = base if (_junk_cap or len(cap_clean) < 12) else cap_clean[:150]
     desc = "\n".join(filter(None, [
-        (cap_clean[:150] if cap_clean else base),
+        desc_lead,
         "", " ".join(dict.fromkeys(hs))[:120],
     ])).strip()
-    hook = " ".join(base.split()[:3]).upper()
+    _hook_src = (base_tags[:3] or kws[:3]) if (_junk_cap or len(cap_clean) < 12) \
+        else [w for w in base.split() if not w.endswith(":")]
+    hook = " ".join(" ".join(_hook_src).split()[:3]).upper()
     return Seo(title[:100], desc[:4900], tags, thumb_hook=hook)
 
 
