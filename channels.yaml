@@ -58,5 +58,5 @@ channels:
         - "DIANA EXACTA"
 
     slot_publish_times_utc:               # these ARE the cron fire times
-      1: "16:00"                          # 12:00 PM US Eastern (US midday scroll) = 9:30 PM IST
+      1: "17:00"                          # 1:00 PM US Eastern (EDT) -- user-requested "USA time 1pm"
       2: "23:00"                          # 7:00 PM US Eastern (US evening prime)  = 4:30 AM IST
