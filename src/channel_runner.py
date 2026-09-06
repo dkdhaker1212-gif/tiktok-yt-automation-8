@@ -187,7 +187,10 @@ def run(channel: Channel, slot: int, dry_run: bool = False,
             edited_path = None
             if not dry_run and (channel.edit or {}).get("enabled", True):
                 edited_path = os.path.join(dest, f"{entry['id']}_edit.mp4")
-                upload_path = video_editor.process(path, edited_path, channel.edit)
+                _ecfg = dict(channel.edit or {})
+                _ecfg["hook_text"] = getattr(s, "thumb_hook", "") or title
+                _ecfg["channel_name"] = channel.youtube_channel_name or ""
+                upload_path = video_editor.process(path, edited_path, _ecfg)
 
             thumb_path = None
             try:

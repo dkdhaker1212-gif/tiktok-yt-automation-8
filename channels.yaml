@@ -27,7 +27,7 @@ channels:
     seo_language: "es"                    # Gemini writes Spanish title/description/tags
     edit:
       enabled: true
-      zoom_crop_pct: 2.0
+      zoom_crop_pct: 3.0
       speed: 1.03
       hflip: false
       fade_seconds: 0.25
@@ -38,6 +38,11 @@ channels:
       loudnorm: true
       volume_gain_db: 0.0
       blur_regions: []
+      hook_caption:                    # burned-in hook, first 3s (retention + transformation)
+        enabled: true
+        seconds: 3
+        position: top
+        size_pct: 5.6
       brand_overlay:                     # small corner mark = the channel's own logo
         enabled: true
         image: "assets/brand_badge.png"

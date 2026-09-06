@@ -21,10 +21,94 @@ from typing import Optional
 FFMPEG = os.environ.get("FFMPEG_BIN", "ffmpeg")
 FFPROBE = os.environ.get("FFPROBE_BIN", "ffprobe")
 
+_FONT_CANDIDATES = [
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",        # Ubuntu (CI)
+    "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+    "/Library/Fonts/Arial Bold.ttf",                               # macOS
+    r"C:\Windows\Fonts\ariblk.ttf",                                # Windows
+    r"C:\Windows\Fonts\arialbd.ttf",
+]
+
+
+def _font_file():
+    for p in _FONT_CANDIDATES:
+        if os.path.isfile(p):
+            return p
+    return None
+
+
+def _dt_escape(s: str) -> str:
+    """Clean text for an ffmpeg drawtext filter value."""
+    s = (s or "").replace("\n", " ").strip()
+    s = re.sub(r"#\S+", "", s)                       # drop hashtags
+    s = re.sub(r"[\U00010000-\U0010ffff]", "", s)    # drop emoji / astral chars
+    s = s.replace("\\", "").replace("%", " pct").replace("'", "").replace('"', "")
+    s = s.replace(":", " ").replace(",", " ")
+    s = re.sub(r"\s+", " ", s).strip()
+    return s[:30].rstrip()
+
+
+def _wrap2(s: str) -> tuple[list[str], int]:
+    """Split into <=2 lines near the middle; return (lines, longest_len)."""
+    if len(s) <= 15 or " " not in s[5:]:
+        return [s], len(s)
+    mid = len(s) // 2
+    best = min((i for i, ch in enumerate(s) if ch == " " and 4 < i < len(s) - 3),
+               key=lambda i: abs(i - mid), default=-1)
+    if best < 0:
+        return [s], len(s)
+    a, b = s[:best].strip(), s[best:].strip()
+    return [a, b], max(len(a), len(b))
+
+
+def _hook_drawtext(opts: "EditOptions", OW: int, OH: int, dur: float) -> str:
+    """A big burned-in hook line for the first N seconds; '' if disabled/no text.
+
+    enable/alpha expressions are wrapped in single quotes so their commas are
+    read as expression syntax, not as filtergraph filter separators.
+    """
+    hc = opts.hook_caption or {}
+    if not hc.get("enabled"):
+        return ""
+    txt = _dt_escape(opts.hook_text or "")
+    if len(txt) < 3:
+        return ""
+    secs = float(hc.get("seconds", 3.0))
+    if dur and dur < secs + 0.6:
+        secs = max(1.2, dur - 0.6)
+    lines, longest = _wrap2(txt)
+    txt = "\n".join(lines)           # a real newline inside text='...' = line break
+    # cap size so the widest line fits ~88% of the frame width
+    size = int(OH * float(hc.get("size_pct", 5.6)) / 100.0)
+    size = max(38, min(size, int(OW * 0.88 / max(1, longest * 0.60))))
+    pos = (hc.get("position") or "top").lower()
+    y = f"{int(OH * 0.10)}" if pos == "top" else f"h-th-{int(OH * 0.16)}"
+    ff = _font_file()
+    # filtergraph-safe: single-quote it AND escape the colon (Windows drive letter)
+    fontarg = (f"fontfile='{ff.replace(chr(92), '/').replace(':', chr(92) + ':')}':"
+               if ff else "")
+    return (
+        f"drawtext={fontarg}text='{txt}':"
+        f"fontcolor=white:fontsize={size}:line_spacing=8:"
+        f"borderw={max(3, size // 14)}:bordercolor=black@0.95:"
+        f"box=1:boxcolor=black@0.42:boxborderw={max(12, size // 4)}:"
+        f"x=(w-text_w)/2:y={y}:"
+        f"enable='lt(t,{secs:.2f})':"
+        f"alpha='min(1,min(t/0.28,({secs:.2f}-t)/0.4))'"
+    )
+
 
 @dataclass
 class EditOptions:
     enabled: bool = True
+
+    # reframe: turn a vertical/portrait source into a 16:9 landscape YouTube frame
+    #   "none" -> keep source aspect (default)
+    #   "fill" -> scale-to-cover 1920x1080 + centre-crop (fills screen, no bars;
+    #             for this account's template that lands on the middle content
+    #             panel and drops the top title bar + bottom dead space)
+    reframe: str = "none"
+    reframe_y_pct: float = 0.0          # shift the crop window down (+) / up (-) as % of height
 
     # de-dup transform (subtle -- changes the fingerprint, not the look)
     zoom_crop_pct: float = 2.0
@@ -48,6 +132,13 @@ class EditOptions:
     # brand badge overlay -- covers a source creator's baked-in logo + brands ours
     brand_overlay: dict = field(default_factory=dict)  # {enabled,image,corner,
                                                        #  width_pct,margin_pct,opacity}
+
+    # strong transformation: a burned-in hook line for the first few seconds.
+    # Big, high-contrast, fades in/out. Boosts retention AND makes the upload a
+    # clearly different work from the TikTok source.
+    hook_caption: dict = field(default_factory=dict)   # {enabled,seconds,position,size_pct}
+    hook_text: str = ""                                # injected per-video by channel_runner
+    channel_name: str = ""                             # injected by channel_runner
 
     @classmethod
     def from_cfg(cls, cfg: Optional[dict]) -> "EditOptions":
@@ -121,11 +212,25 @@ def process(in_path: str, out_path: str, cfg: Optional[dict] = None) -> str:
     chain, last = _blur_chain(w, h, opts.blur_regions)
     vf = list(chain)
 
+    # -- reframe: portrait -> 16:9 landscape (scale-to-cover + centre-crop) ---
+    reframe = (opts.reframe or "none").lower()
+    if reframe == "fill":
+        OW, OH = 1920, 1080
+    else:
+        OW, OH = w, h
+
     tail: list[str] = []
+    if reframe == "fill":
+        tail.append(
+            f"scale={OW}:{OH}:force_original_aspect_ratio=increase:flags=lanczos")
+        yoff = f"(ih-{OH})/2"
+        if opts.reframe_y_pct:
+            yoff += f"+ih*{opts.reframe_y_pct / 100.0:.4f}"
+        tail.append(f"crop={OW}:{OH}:(iw-{OW})/2:{yoff}")
     if opts.zoom_crop_pct and opts.zoom_crop_pct > 0:
         keep = 1 - (opts.zoom_crop_pct / 100.0)
         tail.append(f"crop=iw*{keep:.4f}:ih*{keep:.4f}")
-        tail.append(f"scale={w}:{h}:flags=lanczos")
+        tail.append(f"scale={OW}:{OH}:flags=lanczos")
     if opts.denoise:
         tail.append("hqdn3d=1.5:1.5:6:6")
     if opts.sharpen:
@@ -151,20 +256,28 @@ def process(in_path: str, out_path: str, cfg: Optional[dict] = None) -> str:
     filter_complex = (";".join(vf) + f";[{last}]{tail_str}[v]") if vf \
         else f"[0:v]{tail_str}[v]"
 
+    # -- burned-in hook caption (strong transformation + retention) ------
+    base = "[v]"
+    eff_dur = (meta["duration"] or 0) / (opts.speed or 1.0)
+    hook_dt = _hook_drawtext(opts, OW, OH, eff_dur)
+    if hook_dt:
+        filter_complex += f";[v]{hook_dt}[vh]"
+        base = "[vh]"
+
     # -- brand badge overlay ---------------------------------------------
     _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     bo = opts.brand_overlay or {}
     badge = bo.get("image") or os.path.join("assets", "brand_badge.png")
     badge_abs = badge if os.path.isabs(badge) else os.path.join(_root, badge)
     extra_inputs: list[str] = []
-    vmap = "[v]"
+    vmap = base
     if bo.get("enabled") and os.path.isfile(badge_abs):
         wpct = float(bo.get("width_pct", 26)) / 100.0
         mpct = float(bo.get("margin_pct", 2)) / 100.0
         opac = float(bo.get("opacity", 1.0))
         corner = (bo.get("corner") or "tl").lower()
-        bw = max(16, int(w * wpct))
-        mx = int(w * mpct)
+        bw = max(16, int(OW * wpct))
+        mx = int(OW * mpct)
         pos = {
             "tl": f"{mx}:{mx}",
             "tr": f"W-w-{mx}:{mx}",
@@ -174,7 +287,7 @@ def process(in_path: str, out_path: str, cfg: Optional[dict] = None) -> str:
         extra_inputs = ["-i", badge_abs]
         filter_complex += (
             f";[1:v]format=rgba,colorchannelmixer=aa={opac:.3f},"
-            f"scale={bw}:-1[bd];[v][bd]overlay={pos}[vo]"
+            f"scale={bw}:-1[bd];{base}[bd]overlay={pos}[vo]"
         )
         vmap = "[vo]"
 
