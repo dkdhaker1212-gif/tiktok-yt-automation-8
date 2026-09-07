@@ -18,7 +18,7 @@ from src.orchestrator import run_slot
 def main() -> int:
     load_dotenv()
     ap = argparse.ArgumentParser()
-    ap.add_argument("--slot", type=int, required=True, choices=(1, 2))
+    ap.add_argument("--slot", type=int, required=True, choices=(1, 2, 3))
     ap.add_argument("--channel", default=None, help="channel id, e.g. channel_1")
     ap.add_argument("--dry-run", action="store_true",
                     help="list + pick + 'would upload', but never actually upload")
