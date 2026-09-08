@@ -20,6 +20,8 @@ channels:
     enabled: true
     max_retry_days: 7
     shorts_max_seconds: 180
+    min_video_seconds: 12                 # skip clips shorter than 12s
+    max_video_seconds: 170                # keep it in Shorts range
     upload_mode: popular_only             # always pick the most-viewed unposted video
     max_download_candidates: 20
 

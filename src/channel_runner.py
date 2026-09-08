@@ -56,6 +56,15 @@ def pick_candidates(channel: Channel, slot: int, entries: list[dict],
         cutoff = cutoff.replace(tzinfo=dt.timezone.utc).timestamp()
         avail = [e for e in avail if (e["timestamp"] or 0) >= cutoff]
 
+    # length window: skip source clips outside [min,max] seconds
+
+    _lo = getattr(channel, "min_video_seconds", 0) or 0
+    _hi = getattr(channel, "max_video_seconds", 3600) or 3600
+    avail = [e for e in avail
+
+             if not e.get("duration") or _lo <= e["duration"] <= _hi]
+
+
     newest = sorted(avail, key=lambda e: e["timestamp"] or 0, reverse=True)
     most_viewed = sorted(avail, key=lambda e: e["view_count"] or 0, reverse=True)
 
