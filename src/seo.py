@@ -124,9 +124,17 @@ Return ONLY minified JSON with keys:
 - description: in {language_name}. line 1 = a punchy hook. blank line. 1-2
   short lines of context. blank line. then 6-8 hashtags on one line. No links.
   <= 500 chars.
-- tags: 18-25 lowercase search phrases in {language_name}, most specific
-  first, no "#".
-- hashtags: 8 strings starting with "#", lowercase.
+- tags: 18-25 lowercase search phrases, most specific first, no "#". The
+  first ~14 in {language_name}. Then add 4-6 short international search
+  phrases translating the video's core theme (not literal word-for-word,
+  what a native creator would actually tag) into German, Japanese (kana/kanji,
+  not romaji), and French, so the video also surfaces in UK/Canada/Germany/
+  Japan/USA searches - e.g. for "satisfying": befriedigend (German),
+  スカッと or 満足 (Japanese), satisfaisant (French); for "cute": niedlich,
+  かわいい, mignon. Pick whichever words actually fit THIS clip's theme.
+- hashtags: 8 strings starting with "#", lowercase. 5-6 in {language_name},
+  plus 2-3 in German/Japanese/French translating the core theme the same way
+  as the tags above (e.g. #zufriedenstellend #スカッと #satisfaisant).
 - thumb_hook: 2-4 words in {language_name}, punchy, no emojis, no hashtags -
   goes big on the thumbnail. Different from the title's opening words.
 
