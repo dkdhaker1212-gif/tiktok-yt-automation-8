@@ -54,6 +54,13 @@ class Channel:
 
     # optional
     tiktok_username_slot2: Optional[str] = None
+    tiktok_username_backup: Optional[str] = None    # used only when the primary
+                                                     # source has nothing postable
+                                                     # left, or every candidate it
+                                                     # offered failed to go up
+                                                     # (copyright claim, download
+                                                     # block, etc.) -- keeps daily
+                                                     # posting going unattended.
     min_upload_date: Optional[str] = None
     min_backlog_for_slot1: Optional[int] = None
     fixed_title: Optional[str] = None

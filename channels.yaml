@@ -4,6 +4,7 @@
 channels:
   - id: channel_8                         # unique; used in DB, logs, secret names
     tiktok_username: "josefernandez_blacksmith"   # no @  -- Spanish blacksmith forging axes/knives/swords from scrap steel (own YT channel = 408 subs, effectively not on YouTube). Dedicated source, zero overlap with ch5.
+    tiktok_username_backup: "forjadoshernandez"  # no @ -- emergency-only fallback, used automatically if the primary source runs dry or every candidate it offers fails to post. 9.4K followers, Mexican forged-tools business, small but real, distinct from the primary source.
     youtube_channel_name: "Hachazo Perfecto"
     owner_email: "kishukumaridhaker@gmail.com"
 
