@@ -106,6 +106,17 @@ def _description_for(channel: Channel, meta: dict, entry: dict) -> str:
     return (cap + ("\n\n" + foot if foot else "")).strip()
 
 
+def _candidates_for(channel: Channel, slot: int, username: str,
+                     posted: set[str]) -> tuple[list[dict], list[dict]]:
+    """(entries, candidates) for one TikTok source, or ([], []) if listing fails."""
+    try:
+        entries = td.list_profile(username)
+    except RuntimeError as exc:
+        print(f"[run] listing {username!r} failed: {exc}")
+        return [], []
+    return entries, pick_candidates(channel, slot, entries, posted)
+
+
 def run(channel: Channel, slot: int, dry_run: bool = False,
         force: bool = False) -> SlotResult:
     from . import youtube_uploader as yu       # imported late: needs google libs
