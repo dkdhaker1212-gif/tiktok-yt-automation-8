@@ -87,6 +87,83 @@ def _load_credentials(client_secret_file: str, token_file: str) -> Credentials:
     return creds
 
 
+class CopyrightHold(Exception):
+    """A freshly uploaded video showed a copyright / policy signal. It is NOT published."""
+
+
+def _clean_reason(item: dict) -> Optional[str]:
+    """Return why this video looks flagged, or None when nothing is wrong."""
+    st = item.get("status", {})
+    up = st.get("uploadStatus")
+    if up in ("rejected", "failed", "deleted"):
+        return (f"uploadStatus={up} rejectionReason={st.get('rejectionReason')} "
+                f"failureReason={st.get('failureReason')}")
+    rr = (item.get("contentDetails") or {}).get("regionRestriction") or {}
+    # A video blocked in many countries = copyright claim / takedown. A block in just
+    # a few countries (e.g. RU-only on knife content) is regional policy, not a claim.
+    blocked = rr.get("blocked") or []
+    allowed = rr.get("allowed")
+    if len(blocked) >= 10 or (allowed is not None and len(allowed) < 200):
+        return f"blocked in {len(blocked) if blocked else 'most'} countries (claim/takedown)"
+    return None
+
+
+def verify_before_publish(youtube, vid: str, *, max_wait: int = 540,
+                          grace: int = 120) -> Optional[str]:
+    """Wait for processing + the copyright check window on a PRIVATE video.
+    Returns None if clean, or a reason string (hold). Inconclusive == hold."""
+    deadline = time.time() + max_wait
+    waited_grace = False
+    while time.time() < deadline:
+        items = youtube.videos().list(
+            part="status,contentDetails,processingDetails", id=vid).execute().get("items") or []
+        if not items:
+            return "video vanished right after upload (removed by YouTube)"
+        item = items[0]
+        why = _clean_reason(item)
+        if why:
+            return why
+        done = (item.get("processingDetails") or {}).get("processingStatus") == "succeeded" \
+            or item.get("status", {}).get("uploadStatus") == "processed"
+        if done:
+            if not waited_grace:
+                time.sleep(grace)          # let Content ID finish after processing
+                waited_grace = True
+                continue
+            return None
+        time.sleep(20)
+    return "processing / copyright check did not finish in time"
+
+
+def recent_health(*, client_secret_file: str, token_file: str, days: int = 3) -> Optional[str]:
+    """Pre-flight: any recent upload that was rejected, region-blocked or taken
+    down? Returns a reason (channel should publish nothing) or None."""
+    try:
+        creds = _load_credentials(client_secret_file, token_file)
+        youtube = build("youtube", "v3", credentials=creds, cache_discovery=False)
+        ch = youtube.channels().list(part="contentDetails", mine=True).execute()["items"][0]
+        up = ch["contentDetails"]["relatedPlaylists"]["uploads"]
+        pl = youtube.playlistItems().list(part="contentDetails,snippet", maxResults=15,
+                                          playlistId=up).execute()
+        cutoff = time.strftime("%Y-%m-%dT", time.gmtime(time.time() - days * 86400))
+        ids = [i["contentDetails"]["videoId"] for i in pl.get("items", [])
+               if i["snippet"]["publishedAt"] >= cutoff]
+        if not ids:
+            return None
+        vs = youtube.videos().list(part="status,contentDetails", id=",".join(ids)).execute()
+        for v in vs.get("items", []):
+            why = _clean_reason(v)
+            if why:
+                return f"recent video {v['id']}: {why}"
+            if v["status"].get("privacyStatus") != "public":
+                return f"recent video {v['id']} is {v['status'].get('privacyStatus')} (not public)"
+        return None
+    except Exception as exc:  # noqa: BLE001  -- an unreadable check must not publish blind
+        if "authenticatedUserAccountSuspended" in str(exc):
+            raise ChannelSuspended(str(exc)) from exc
+        return f"health check could not run: {str(exc)[:200]}"
+
+
 def upload(
     *,
     file_path: str,
@@ -99,7 +176,8 @@ def upload(
     token_file: str,
     dry_run: bool = False,
 ) -> Optional[str]:
-    """Upload one video as public. Returns the YouTube video id (None on dry run)."""
+    """Upload one video PRIVATE, verify it is clean, then publish. Returns the YouTube
+    video id (None on dry run). Raises CopyrightHold (video deleted / kept private)."""
     title = (title or "Untitled").strip()[:100]
     tags = _sanitize_tags([*(tags or []), *(["Shorts"] if is_short else [])])
     body = {
@@ -110,7 +188,7 @@ def upload(
             "tags": tags,
         },
         "status": {
-            "privacyStatus": "public",
+            "privacyStatus": "private",
             "selfDeclaredMadeForKids": False,
         },
     }
@@ -158,6 +236,22 @@ def upload(
         else:
             raise
     vid = response["id"]
+    print(f"[upload] uploaded private -> https://www.youtube.com/watch?v={vid}; checking before publish")
+    why = verify_before_publish(youtube, vid)
+    if why:
+        definite = not why.startswith(("processing", "video vanished"))
+        if definite:
+            try:
+                youtube.videos().delete(id=vid).execute()
+                print(f"[upload] HELD + deleted {vid}: {why}")
+            except Exception as exc:  # noqa: BLE001
+                print(f"[upload] HELD {vid} (left private, delete failed: {exc}): {why}")
+        else:
+            print(f"[upload] HELD {vid} (left private for manual review): {why}")
+        raise CopyrightHold(why)
+    youtube.videos().update(part="status", body={
+        "id": vid, "status": {"privacyStatus": "public", "selfDeclaredMadeForKids": False},
+    }).execute()
     print(f"[upload] done -> https://www.youtube.com/watch?v={vid}")
     return vid
 

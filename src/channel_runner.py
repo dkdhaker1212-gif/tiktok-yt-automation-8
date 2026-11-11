@@ -205,6 +205,17 @@ def _upload_loop(channel: Channel, slot: int, db: DB, candidates: list[dict],
     """Try each candidate in order; return the first success, or None if every
     one of them failed (caller decides what to try next)."""
     cid = channel.id
+    holds = 0
+    if not dry_run:
+        bad = yu.recent_health(
+            client_secret_file=channel.abspath(channel.google_credentials_file),
+            token_file=channel.abspath(channel.oauth_token_file))
+        if bad:
+            res = SlotResult(cid, slot, "failed",
+                             f"PRE-PUBLISH HOLD (nothing uploaded): {bad}")
+            db.record_run(cid, slot, "failed", res.detail)
+            print(f"[run] {res.detail}")
+            return res
     for entry in candidates:
         meta = td.probe_entry_meta(username, entry["id"]) or {}
         path = td.download(entry, dest)
@@ -279,6 +290,22 @@ def _upload_loop(channel: Channel, slot: int, db: DB, candidates: list[dict],
                              f"CHANNEL SUSPENDED: {exc}", title=title)
             db.record_run(cid, slot, "failed", res.detail)
             return res
+        except yu.CopyrightHold as exc:
+            # copyright / policy signal: never published. Burn this TikTok id so it
+            # is not retried, and stop after 2 holds in one run.
+            last_err = f"HELD (not published) {entry['id']}: {exc}"
+            print(f"[run] {last_err}")
+            db._upsert(cid, entry["id"], status="failed_permanent", slot=slot,
+                       title=title, tiktok_url=entry["url"],
+                       view_count=entry.get("view_count"), error=last_err[:1000])
+            holds += 1
+            if holds >= 2:
+                res = SlotResult(cid, slot, "failed",
+                                 f"COPYRIGHT HOLD x{holds}: nothing published. {last_err}",
+                                 title=title)
+                db.record_run(cid, slot, "failed", res.detail)
+                return res
+            continue
         except Exception as exc:  # noqa: BLE001
             # upload rejected (e.g. a copyright claim) -- log it as this
             # candidate's failure and move on to the next one / next source
